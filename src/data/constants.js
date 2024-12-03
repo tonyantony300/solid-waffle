@@ -1,0 +1,9 @@
+export const AUTH_CONFIG = {
+  INPUT_LENGTH: 6,
+  CORRECT_CODE: "000000",
+  ANIMATION_DURATION: 800,
+  GLOW_SIZE: {
+    MIN: 150,
+    MAX: 280,
+  },
+};
