@@ -6,9 +6,9 @@
   import Lock from "./Lock.svelte";
 
   // Component props with default values
-  export let onSuccess = () => {};
-  export let onError = () => {};
-  export let validateCode = () => {};
+  export let onSuccess;
+  export let onError;
+  export let validateCode;
   export let inputLength = AUTH_CONFIG.INPUT_LENGTH;
   export let heading = "Easy peasy";
   export let instruction = "Enter 6-digit code from your authentication APP.";
@@ -18,6 +18,7 @@
   let isError = false;
   let isSuccess = false;
   let glowVisibility = false;
+  let inputs = [];
 
   // Animation configuration for the glow effect
   const glowSize = tweened(AUTH_CONFIG.GLOW_SIZE.MIN, {
@@ -41,44 +42,96 @@
     focusInput(activeIndex);
   }
 
-  // Handles input changes and validation
   const handleInput = (event, index) => {
-    const value = event.target.value.trim();
+    const value = event.target.value;
+    const inputEl = inputs[index];
 
-    // Validate numeric input
-    if (isNaN(value) || value.length > 1) {
-      code[index] = "";
-      code = [...code];
+    if (isNaN(value)) {
+      inputEl.value = code[index];
       return;
     }
 
-    // Update code array and manage focus
-    code[index] = value;
+    // when the input contains two values, it is a replacement
+
+    if (value.length === 2) {
+      const digits = value.split("");
+      const newDigit =
+        digits[0] === digits[1]
+          ? digits[0]
+          : digits.find((d) => d !== code[index]);
+      code[index] = inputEl.value = newDigit;
+    } else {
+      code[index] = value;
+    }
+
     code = [...code];
-
-    if (value && index < inputLength - 1) {
-      activeIndex = index + 1;
-    }
-
-    // Validate complete code
-    if (code.join("").length === inputLength) {
-      activeIndex = null;
-      validateInputCode();
-    }
+    if (value && index < inputLength - 1) activeIndex = index + 1;
+    if (code.join("").length === inputLength) validateInputCode();
   };
 
-  // Handles backspace and state reset
+  // Handles keyboard navigation
   const handleKeydown = (event, index) => {
-    if (event.key === "Backspace") {
-      if (!code[index] && index > 0) {
-        activeIndex = index - 1;
-        code[activeIndex] = "";
-      } else {
-        code[index] = "";
+    const { key, shiftKey } = event;
+
+    const navigationMap = {
+      Backspace: () => {
+        if (!code[index] && index > 0) {
+          activeIndex = index - 1;
+          code[activeIndex] = "";
+        } else {
+          code[index] = "";
+        }
+        code = [...code];
+        isSuccess = isError = false;
+      },
+      // when user reaches last input and keeps pressing navigation again, focus shifts to the other end
+      // shift + left sets focus to first input
+      ArrowLeft: () => {
+        event.preventDefault();
+        activeIndex = shiftKey
+          ? 0
+          : activeIndex === null
+            ? index
+            : (index - 1 + inputLength) % inputLength;
+      },
+      ArrowRight: () => {
+        event.preventDefault();
+        activeIndex = shiftKey ? inputLength - 1 : (index + 1) % inputLength;
+      },
+    };
+
+    navigationMap[key]?.();
+  };
+
+  const handlePaste = (event, index) => {
+    // only handle paste when it is the first input and no digits are filled
+    if (index === 0 && !code.some((digit) => digit)) {
+      event.preventDefault();
+
+      const pastedData = event.clipboardData.getData("text").trim();
+
+      if (isNaN(pastedData)) return;
+
+      // take only first inputLength digits if pasted text is longer
+      const digits = pastedData.slice(0, inputLength).split("");
+
+      // fill the code array with new digits
+      code = Array(inputLength)
+        .fill("")
+        .map((_, i) => digits[i] || "");
+
+      // update inputs
+      code.forEach((digit, i) => {
+        if (inputs[i] && digit) {
+          inputs[i].value = digit;
+        }
+      });
+
+      if (code.join("").length === inputLength) {
+        setTimeout(() => {
+          validateInputCode();
+        }, 500);
       }
-      code = [...code];
-      isSuccess = false;
-      isError = false;
     }
   };
 
@@ -152,20 +205,22 @@
           class={`input-wrapper ${activeIndex === index ? "active" : "inactive"} ${index === 2 ? " extra-space" : ""}`}
         >
           <input
+            bind:this={inputs[index]}
+            value={code[index]}
             id={`input-${index}`}
             class={`input${isError ? " error" : isSuccess ? " success" : ""}`}
             type="text"
             inputmode="numeric"
             pattern="[0-9]*"
-            maxlength="1"
+            maxlength="2"
             autocomplete="one-time-code"
             aria-required="true"
             aria-label={`Digit ${index + 1} of ${inputLength}`}
             aria-invalid={isError}
             class:filled={!isError && code[index]}
-            bind:value={code[index]}
             on:input={(event) => handleInput(event, index)}
             on:keydown={(event) => handleKeydown(event, index)}
+            on:paste={(event) => handlePaste(event, index)}
           />
         </span>
       {/each}

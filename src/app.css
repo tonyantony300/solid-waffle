@@ -197,7 +197,7 @@ input {
   width: 70%;
   height: 70%;
   z-index: 1;
-  background-color: #fff;
+  background: transparent;
   border-bottom: 3px solid var(--color-primary);
   pointer-events: none;
 }
